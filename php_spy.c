@@ -1,5 +1,9 @@
 #include "php_spy.h"
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 ZEND_DECLARE_MODULE_GLOBALS(spy)
 
 #if COMPILE_DL_SPY
