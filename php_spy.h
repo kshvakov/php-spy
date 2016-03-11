@@ -6,45 +6,44 @@
 #endif
 
 #include <php.h>
+#include <zend_extensions.h>
+
+#ifndef ZEND_EXT_API
+# if defined(__GNUC__) && __GNUC__ >= 4
+#  define ZEND_EXT_API __attribute__ ((visibility("default")))
+# else
+#  define ZEND_EXT_API
+# endif
+#endif
 
 typedef struct spy_coverage_line {
     int lineno;
     int count;
 } spy_coverage_line;
 
-typedef struct spy_coverage_file {
-    char               *name;
-    HashTable        *lines;
-} spy_coverage_file;
-
 void spy_coverage_line_dtor(void *data);
+
+typedef struct spy_coverage_file {
+    char       *name;
+    HashTable  *lines;
+} spy_coverage_file;
 
 spy_coverage_file *spy_coverage_file_ctor(const char *filename);
 void spy_coverage_file_dtor(void *data);
 
-void spy_count_line(const char *file, int lineno TSRMLS_DC);
-
-extern zend_module_entry spy_module_entry;
-
-PHP_MINIT_FUNCTION(spy);
-PHP_MSHUTDOWN_FUNCTION(spy);
-PHP_RINIT_FUNCTION(spy);
-PHP_RSHUTDOWN_FUNCTION(spy);
-PHP_MINFO_FUNCTION(spy);
-PHP_FUNCTION(spy_hello);
-
-ZEND_BEGIN_MODULE_GLOBALS(spy)
-    HashTable            *code_coverage;
+typedef struct _spy_globals {
+    HashTable            coverage;
     char                 *previous_filename;
     spy_coverage_file    *previous_file;
-    char                 *previous_mark_filename;
-    spy_coverage_file    *previous_mark_file;
-ZEND_END_MODULE_GLOBALS(spy)
+    int                  counted;
+} zend_spy_globals;
 
 #ifdef ZTS
-    #define SPY_G(v) TSRMG(spy_globals_id, zend_spy_globals *, v)
+# define SPY_G(v) ZEND_TSRMG(spy_globals_id, zend_spy_globals *, v)
+extern int spy_globals_id;
 #else
-    #define SPY_G(v) (spy_globals.v)
+# define SPY_G(v) (spy_globals.v)
+extern zend_spy_globals spy_globals;
 #endif
 
 #endif /* PHP_SPY_H */
