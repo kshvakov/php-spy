@@ -37,6 +37,9 @@ typedef struct _spy_globals {
     HashTable            *coverage;
     char                 *previous_filename;
     spy_coverage_file    *previous_file;
+
+    char                 *script_name;
+    char                 *server_name;
 } zend_spy_globals;
 
 #ifdef ZTS

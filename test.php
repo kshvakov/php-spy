@@ -29,7 +29,7 @@ test2();
 
 
 require_once 'test2.php';
-baz();
+var_dump(baz());
 
 require_once 'test3.php';
 baz2();
