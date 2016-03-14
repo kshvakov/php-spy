@@ -1,7 +1,5 @@
 <?php
 
-require_once 'test2.php';
-
 function foo() {
 	return "bar";
 }
@@ -28,4 +26,11 @@ if ($a > 4) {
 var_dump(test2());
 var_dump($a, $b, $c);
 test2();
+
+
+require_once 'test2.php';
 baz();
+
+require_once 'test3.php';
+baz2();
+

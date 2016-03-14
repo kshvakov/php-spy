@@ -16,6 +16,8 @@
 # endif
 #endif
 
+void dump_coverage(void);
+
 typedef struct spy_coverage_line {
     int lineno;
     int count;
@@ -32,10 +34,9 @@ spy_coverage_file *spy_coverage_file_ctor(const char *filename);
 void spy_coverage_file_dtor(void *data);
 
 typedef struct _spy_globals {
-    HashTable            coverage;
+    HashTable            *coverage;
     char                 *previous_filename;
     spy_coverage_file    *previous_file;
-    int                  counted;
 } zend_spy_globals;
 
 #ifdef ZTS
