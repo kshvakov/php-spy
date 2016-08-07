@@ -40,6 +40,10 @@ typedef struct _spy_globals {
 
     char                 *script_name;
     char                 *server_name;
+
+    struct sockaddr_storage     sockaddr;
+    size_t                      sockaddr_len;
+    int                         fd;
 } zend_spy_globals;
 
 #ifdef ZTS

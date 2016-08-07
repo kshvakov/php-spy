@@ -23,10 +23,12 @@ if ($a > 4) {
 	$c = 10;
 }
 
+require_once 'test2.php';
+var_dump(baz());
+
 var_dump(test2());
 var_dump($a, $b, $c);
 test2();
-
 
 require_once 'test2.php';
 var_dump(baz());

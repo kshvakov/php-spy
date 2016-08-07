@@ -4,6 +4,12 @@
 
 #include "php_spy.h"
 #include "SAPI.h"
+#include <errno.h>
+#include <string.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 ZEND_EXTENSION();
 
@@ -12,6 +18,47 @@ zend_spy_globals spy_globals;
 #else
 int spy_globals_id;
 #endif
+
+int spy_connect()
+{
+    const char* host = "127.0.0.1"; /* localhost */
+    const char* port = "42042";
+    struct addrinfo *ai_list;
+    struct addrinfo *ai_ptr;
+    struct addrinfo  ai_hints;
+    int status;
+
+    memset(&ai_hints, 0, sizeof(ai_hints));
+    ai_hints.ai_flags     = 0;
+#ifdef AI_ADDRCONFIG
+    ai_hints.ai_flags    |= AI_ADDRCONFIG;
+#endif
+    ai_hints.ai_family    = AF_UNSPEC;
+    ai_hints.ai_socktype  = SOCK_DGRAM;
+    ai_hints.ai_addr      = NULL;
+    ai_hints.ai_canonname = NULL;
+    ai_hints.ai_next      = NULL;
+
+    ai_list = NULL;
+    status = getaddrinfo(host, port, &ai_hints, &ai_list);
+    if (status != 0) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "failed to resolve host '%s': %s", host, gai_strerror(status));
+        return FAILURE;
+    }
+
+    int fd = socket(ai_list->ai_family, ai_list->ai_socktype, ai_list->ai_protocol);
+    if (fd == -1) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "failed to open socket: %d", fd);
+        return FAILURE;
+    }
+
+    SPY_G(fd) = fd;
+    SPY_G(sockaddr_len) = ai_list->ai_addrlen;
+    memcpy(&SPY_G(sockaddr), ai_list->ai_addr, ai_list->ai_addrlen);
+
+    freeaddrinfo(ai_list);
+    return SUCCESS;
+}
 
 static void spy_globals_ctor(zend_spy_globals *spy_globals)
 {
@@ -75,6 +122,10 @@ void spy_activate(void)
         SPY_G(server_name) = "cli";
     }
 
+    //SPY_G(sockaddr) = NULL;
+    SPY_G(sockaddr_len) = -1;
+    SPY_G(fd) = -1;
+
     ALLOC_HASHTABLE(SPY_G(coverage));
     zend_hash_init(SPY_G(coverage), 32, NULL, spy_coverage_file_dtor, 0);
 }
@@ -89,6 +140,11 @@ void spy_deactivate(void)
 
     SPY_G(script_name) = NULL;
     SPY_G(server_name) = NULL;
+
+
+    if (SPY_G(fd) >= 0) {
+        close(SPY_G(fd));
+    }
 
     zend_hash_destroy(SPY_G(coverage));
     FREE_HASHTABLE(SPY_G(coverage));
@@ -144,7 +200,6 @@ void statement_handler(zend_op_array *op_array)
 
 void dump_coverage(void)
 {
-    fprintf(stderr, "\ndump_coverage %s:%s\n", SPY_G(server_name), SPY_G(script_name));
     HashPosition file_idx;
     HashPosition line_idx;
 
@@ -152,20 +207,45 @@ void dump_coverage(void)
     spy_coverage_file *file = NULL;
     spy_coverage_line *line = NULL;
 
+    char *buf;
+    if ((buf = emalloc(65536)) == NULL) {
+        return;
+    }
+
+    // FILE *fp = NULL;
+    // fp = fopen("/tmp/spy.log", "w+");
+    // if (NULL == fp) {
+    //     zend_error(E_ERROR, "Failed to open file");
+    //     return;
+    // }
+
+    int buf_len = 0;
+    buf_len += sprintf(buf + buf_len, "server:%s\n", SPY_G(server_name));
+    buf_len += sprintf(buf + buf_len, "script:%s\n", SPY_G(script_name));
     for (zend_hash_internal_pointer_reset_ex(SPY_G(coverage), &file_idx);
          zend_hash_get_current_data_ex(SPY_G(coverage), (void**) &dest, &file_idx) == SUCCESS;
          zend_hash_move_forward_ex(SPY_G(coverage), &file_idx)) {
 
         file = (spy_coverage_file *) *dest;
+        buf_len += sprintf(buf + buf_len, "file:%s\n", file->name);
         for (zend_hash_internal_pointer_reset_ex(file->lines, &line_idx);
             zend_hash_get_current_data_ex(file->lines, (void**) &dest, &line_idx) == SUCCESS;
             zend_hash_move_forward_ex(file->lines, &line_idx)) {
 
             line = (spy_coverage_line *) *dest;
-            fprintf(stderr, "%s:%d - %d\n", file->name, line->lineno, line->count);
+            buf_len += sprintf(buf + buf_len, "%d:%d ", line->lineno, line->count);
         }
+        buf_len += sprintf(buf + buf_len, "\n");
     }
-    fprintf(stderr, "\ndump_coverage end\n");
+    //fclose(fp);
+
+    spy_connect();
+    if (sendto(SPY_G(fd), buf, buf_len, 0, (struct sockaddr *) &SPY_G(sockaddr), SPY_G(sockaddr_len)) == -1) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "failed to send to socket: %d", SPY_G(fd));
+        efree(buf);
+        return;
+    }
+    efree(buf);
 }
 
 
